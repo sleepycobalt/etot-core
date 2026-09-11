@@ -19,10 +19,16 @@ and the controller runs:
 
 The stop condition is explicit and logged, because *which* condition fires
 is one of the research questions.
+
+"Unchanged" compares the set of failure keys between consecutive checks.
+failure_key(failure) names a failure; the default, (insight_id, rule), is
+Motif's vocabulary. A tool whose failures are identified otherwise passes its
+own key, so distinct objections never collapse into one and stop the loop
+while progress is being made.
 """
 
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Hashable
 
 
 @dataclass
@@ -33,8 +39,14 @@ class LoopResult:
     verdicts: list = field(default_factory=list)
 
 
+def _motif_key(failure: dict) -> Hashable:
+    return (failure.get("insight_id"), failure.get("rule"))
+
+
 def run_loop(*, state: dict, produce: Callable, check: Callable, revise: Callable,
-             max_iterations: int = 3, logger=None, critic_enabled: bool = True) -> LoopResult:
+             max_iterations: int = 3, logger=None, critic_enabled: bool = True,
+             failure_key: Callable[[dict], Hashable] | None = None) -> LoopResult:
+    key = failure_key or _motif_key
     state = produce(state)
     if logger:
         logger.record_iteration(0, {"stage": "produce", "state": state})
@@ -55,9 +67,7 @@ def run_loop(*, state: dict, produce: Callable, check: Callable, revise: Callabl
         if verdict.get("pass"):
             return LoopResult(state, i, "critic_pass", verdicts)
 
-        failure_keys = frozenset(
-            (f.get("insight_id"), f.get("rule")) for f in failures
-        )
+        failure_keys = frozenset(key(f) for f in failures)
         if failure_keys and failure_keys == prev_failure_keys:
             return LoopResult(state, i, "no_progress", verdicts)
         prev_failure_keys = failure_keys

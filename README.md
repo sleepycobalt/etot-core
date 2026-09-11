@@ -36,13 +36,17 @@ from etot_core.logger import RunLogger
 from etot_core import llm
 
 result = run_loop(
-    state,
+    state={},
     produce=produce,   # state -> state: first draft into state
     check=check,       # state -> verdict: {"pass": bool, "failures": [...]}
-    revise=revise,      # state, verdict -> state: address failures
+    revise=revise,     # state, verdict -> state: address failures
     max_iterations=3,
 )
 ```
+
+The loop stops on a passing verdict, on no progress (the same set of failures twice running), or at
+`max_iterations`. Failures are identified by `(insight_id, rule)` by default; pass `failure_key=` to name them
+by your own fields, e.g. `failure_key=lambda f: (f["finding_id"], f["rule"])`.
 
 Call models through `llm.call`, log through `RunLogger`, and keep tool-specific prompts, rules, and corpus handling in your own package — `etot_core` never talks to a tool's domain, and a tool never re-implements the loop.
 
