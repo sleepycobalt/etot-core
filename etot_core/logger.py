@@ -31,6 +31,17 @@ from pathlib import Path
 from typing import Callable
 
 
+def _entry_files(entry: dict) -> list[str]:
+    """The files a manifest entry snapshots: its declared `files`, or <name>.txt and <name>.jsonl."""
+    declared = entry.get("files")
+    if declared is None:
+        return [f"{entry['name']}.txt", f"{entry['name']}.jsonl"]
+    if not isinstance(declared, list) or not all(
+            isinstance(f, str) and f not in ("", ".", "..") and Path(f).name == f for f in declared):
+        raise ValueError(f"manifest entry {entry.get('name')!r}: `files` must be a list of plain file names, got {declared!r}")
+    return list(declared)
+
+
 def _stderr(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
 
@@ -98,24 +109,32 @@ class RunLogger:
             fh.write(msg + "\n")
 
     def snapshot_corpus(self, processed_dir: str | Path, names: list[str] | None = None) -> Path | None:
-        """Copy the processed transcripts this run uses into runs/<id>/corpus/ so
-        receipts and re-critiques resolve against exactly what the run saw.
-        Skipped in redact mode; the manifest is still recorded in meta."""
+        """Copy the processed corpus files this run uses into runs/<id>/corpus/ so
+        receipts and re-checks resolve against exactly what the run saw.
+        Skipped in redact mode; the manifest is still recorded in meta.
+
+        processed_dir/manifest.json is a list of entries, each with a `name`. An entry's
+        files default to <name>.txt and <name>.jsonl; an entry may list its own `files`
+        instead (plain file names inside processed_dir). `words` is summed into meta when
+        every selected entry has it. Names are recorded under meta["corpus"]["transcripts"]."""
         src = Path(processed_dir)
         manifest = json.load(open(src / "manifest.json", encoding="utf-8"))
         if names:
             manifest = [m for m in manifest if m["name"] in names]
-        self.meta["corpus"] = {"source": str(src.resolve()), "transcripts": [m["name"] for m in manifest],
-                               "words": sum(m["words"] for m in manifest)}
+        corpus = {"source": str(src.resolve()), "transcripts": [m["name"] for m in manifest]}
+        if all("words" in m for m in manifest):
+            corpus["words"] = sum(m["words"] for m in manifest)
+        files = [_entry_files(m) for m in manifest]      # validated before anything is written
+        self.meta["corpus"] = corpus
         self._write("meta.json", self.meta)
         if self.redact:
             return None
         dst = self.dir / "corpus"
         dst.mkdir(exist_ok=True)
         json.dump(manifest, open(dst / "manifest.json", "w", encoding="utf-8"), indent=2, ensure_ascii=False)
-        for m in manifest:
-            for ext in (".txt", ".jsonl"):
-                shutil.copy(src / f"{m['name']}{ext}", dst / f"{m['name']}{ext}")
+        for rels in files:
+            for rel in rels:
+                shutil.copy(src / rel, dst / rel)
         return dst
 
     def finish(self, output: dict, markdown: str | None = None,

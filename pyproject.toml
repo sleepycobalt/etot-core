@@ -1,6 +1,6 @@
 [project]
 name = "etot-core"
-version = "0.1.0"
+version = "0.2.0"
 description = "Shared engine for ETOT agentic loops: a plan -> act -> check -> revise controller, a structured LLM client, a run logger, and config loading. Motif is the first tool built on it."
 readme = "README.md"
 license = "MIT"

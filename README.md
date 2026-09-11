@@ -22,6 +22,12 @@ pip install etot-core
 
 Python 3.10+. Requires an Anthropic API key at call time (`ANTHROPIC_API_KEY` or a context-scoped key passed to `core.llm`).
 
+A tool path that never calls a model can load its config without a key: `load_config(path, require_key=False)`. The default (`require_key=True`) raises when no key is available.
+
+## Snapshots
+
+`RunLogger.snapshot_corpus(processed_dir, names)` copies what a run reads into `runs/<id>/corpus/`, driven by `processed_dir/manifest.json`. Each entry needs a `name`; its files default to `<name>.txt` and `<name>.jsonl`, or it can list its own as `"files": ["library.jsonl", ...]`. A `words` count is recorded when every entry has one.
+
 ## Use it in a new tool
 
 ```python
